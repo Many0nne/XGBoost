@@ -68,8 +68,8 @@ MSPR.AI/
 
 ## Tests
 
-Des tests unitaires sont disponibles dans le dossier Tests/. Pour les lancer :
-pytest Tests/
+Tests unitaires disponibles
+- pytests Tests/
 
 ## Dépendances principales
 
