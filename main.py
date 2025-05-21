@@ -1,7 +1,7 @@
 from predictor.database import create_db_engine, load_data
 from predictor.data_processing import create_features
 from predictor.model import PandemicModel
-from predictor.visualization import plot_predictions
+from predictor.visualization import plot_predictions, save_metrics, plot_residuals
 
 """
 Ce projet implémente une IA pour prédire l'évolution des cas ou des décès liés à une maladie dans un pays donné.
@@ -34,11 +34,35 @@ if __name__ == "__main__":
     # Création des features
     df = create_features(df, target)
     
+    # Définition unique de la liste des features
+    feature_names = [col for col in df.columns if col.startswith('lag_') or 
+                     col.startswith('rolling_') or 
+                     col in ['day_of_week', 'day_of_month', 'month', 'cases_per_100k', 'deaths_per_100k']]
+    
     # Initialisation du gestionnaire de modèles
     model_manager = PandemicModel()
     
-    # Prédictions futures
-    predictions = model_manager.predict_future(df, target)
+    # Entraînement du modèle
+    model, metrics = model_manager.train_model(df, target, feature_names=feature_names)
     
-    # Enregistrement du graphique
+    # Prédictions futures
+    predictions = model_manager.predict_future(df, target, feature_names=feature_names)
+
+    # On clippe les valeurs prédites pour éviter les valeurs négatives
+    predictions[f"predicted_{target}"] = predictions[f"predicted_{target}"].clip(lower=0)
+    
+    # Sauvegarde des prédictions dans un CSV
+    predictions.to_csv(f"visualization/{country_name}_{target}_predictions.csv")
+    print(f"Prédictions : {predictions.head()}")
+
+    # Enregistrement du graphique réel vs prédictions
     plot_predictions(df, predictions, target, country_name)
+    
+    # Sauvegarde des métriques
+    save_metrics(metrics, country_name, target)
+    
+    # Graphique des résidus (optionnel)
+    if len(df) >= len(predictions):
+        y_true = df[target].iloc[-len(predictions):].values
+        y_pred = predictions[f"predicted_{target}"].values
+        plot_residuals(y_true, y_pred, country_name, target)
