@@ -2,6 +2,7 @@ from predictor.database import create_db_engine, load_data
 from predictor.data_processing import create_features
 from predictor.model import PandemicModel
 from predictor.visualization import plot_predictions, save_metrics, plot_residuals
+import argparse
 
 """
 Ce projet implémente une IA pour prédire l'évolution des cas ou des décès liés à une maladie dans un pays donné.
@@ -17,6 +18,11 @@ Ce système peut être utilisé pour anticiper les tendances et aider à la pris
 sanitaires ou épidémiologiques.
 """
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Prédiction de cas/décès par IA")
+    parser.add_argument("--country", type=str, default="France", help="Nom du pays à prédire")
+    parser.add_argument("--days", type=int, default=7, help="Nombre de jours à prédire")
+    args = parser.parse_args()
+
     # Configuration de la base de données
     DB_USER = "root"
     DB_PASSWORD = "root"
@@ -25,14 +31,15 @@ if __name__ == "__main__":
     
     # Initialisation
     engine = create_db_engine(DB_USER, DB_PASSWORD, DB_HOST, DB_NAME)
-    country_name = "France"
+    country_name = args.country
     target = "new_cases"
+    days_ahead = args.days
     
     # Chargement des données
     df = load_data(engine, country_name)
     
-    # Création des features
-    df = create_features(df, target)
+    # Création des features (exemple d'utilisation des paramètres)
+    df = create_features(df, target, look_back=30, use_lags=True, use_rolling=True, use_calendar=True)
     
     # Définition unique de la liste des features
     feature_names = [col for col in df.columns if col.startswith('lag_') or 
@@ -46,14 +53,13 @@ if __name__ == "__main__":
     model, metrics = model_manager.train_model(df, target, feature_names=feature_names)
     
     # Prédictions futures
-    predictions = model_manager.predict_future(df, target, feature_names=feature_names)
+    predictions = model_manager.predict_future(df, target, feature_names=feature_names, days_ahead=days_ahead)
 
     # On clippe les valeurs prédites pour éviter les valeurs négatives
     predictions[f"predicted_{target}"] = predictions[f"predicted_{target}"].clip(lower=0)
     
     # Sauvegarde des prédictions dans un CSV
     predictions.to_csv(f"visualization/{country_name}_{target}_predictions.csv")
-    print(f"Prédictions : {predictions.head()}")
 
     # Enregistrement du graphique réel vs prédictions
     plot_predictions(df, predictions, target, country_name)

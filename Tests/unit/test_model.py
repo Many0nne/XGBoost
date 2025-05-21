@@ -16,6 +16,10 @@ def test_train_model():
         "month": [1,1,1,1,1],
     }, index=pd.date_range("2023-01-01", periods=5))
     model_manager = PandemicModel()
-    model, metrics = model_manager.train_model(df, "new_cases")
+    # Génération de la liste des features comme dans main.py
+    feature_names = [col for col in df.columns if col.startswith('lag_') or 
+                     col.startswith('rolling_') or 
+                     col in ['day_of_week', 'day_of_month', 'month', 'cases_per_100k', 'deaths_per_100k']]
+    model, metrics = model_manager.train_model(df, "new_cases", feature_names=feature_names)
     assert model is not None
     assert "MAE" in metrics

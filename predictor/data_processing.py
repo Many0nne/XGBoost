@@ -1,40 +1,58 @@
 import pandas as pd
 
-def create_features(df: pd.DataFrame, target: str, look_back: int = 30) -> pd.DataFrame:
+def create_features(df: pd.DataFrame, target: str, look_back: int = 30,
+                    use_lags: bool = True, use_rolling: bool = True, use_calendar: bool = True) -> pd.DataFrame:
     """
     Fonction pour créer des features à partir des données historiques.
 
     Args:
         df (pd.DataFrame): DataFrame contenant les données historiques.
-        target (str): Nom de la colonne cible pour la prédiction.
+        target (str): Nom de la colonne cible à prédire.
         look_back (int): Nombre de jours pour les features de décalage temporel.
+        use_lags (bool): Indique si les features de décalage temporel doivent être créées.
+        use_rolling (bool): Indique si les moyennes mobiles doivent être créées.
+        use_calendar (bool): Indique si les features temporelles doivent être créées.
 
     Returns:
-        df (pd.DataFrame): DataFrame avec les nouvelles features ajoutées.
-
-    Explanation:
-        - Une moyenne mobile est une technique de lissage qui calcule la moyenne d'un ensemble de valeurs sur une période donnée pour éviter le bruit.
-            - exemple : Au lieu de prendre la valeur brute d'un jour, on prend une moyenne de plusieurs jours pour avoir un aperçu plus clair de la tendance.
-        - Lag features : De base le modèle ne peut pas prédire la valeur d'un jour en fonction de lui-même, il faut donc créer des features qui prennent en compte les jours précédents.
+        pd.DataFrame: DataFrame avec les nouvelles features ajoutées.
     """
-    # Features de décalage temporel
+    # Supprimer les anciennes colonnes de features si elles existent
     for i in range(1, look_back + 1):
-        df[f'lag_{i}'] = df[target].shift(i)
-    
+        col = f'lag_{i}'
+        if col in df.columns:
+            df.drop(columns=[col], inplace=True)
+    if 'rolling_7_mean' in df.columns:
+        df.drop(columns=['rolling_7_mean'], inplace=True)
+    if 'rolling_30_mean' in df.columns:
+        df.drop(columns=['rolling_30_mean'], inplace=True)
+    if 'day_of_week' in df.columns:
+        df.drop(columns=['day_of_week'], inplace=True)
+    if 'day_of_month' in df.columns:
+        df.drop(columns=['day_of_month'], inplace=True)
+    if 'month' in df.columns:
+        df.drop(columns=['month'], inplace=True)
+    if 'cases_per_100k' in df.columns:
+        df.drop(columns=['cases_per_100k'], inplace=True)
+    if 'deaths_per_100k' in df.columns:
+        df.drop(columns=['deaths_per_100k'], inplace=True)
+
+    # Features de décalage temporel
+    if use_lags:
+        for i in range(1, look_back + 1):
+            df[f'lag_{i}'] = df[target].shift(i)
     # Moyennes mobiles
-    df['rolling_7_mean'] = df[target].rolling(7).mean()
-    df['rolling_30_mean'] = df[target].rolling(30).mean()
-    
+    if use_rolling:
+        df['rolling_7_mean'] = df[target].rolling(7).mean()
+        df['rolling_30_mean'] = df[target].rolling(30).mean()
     # Features temporelles
-    df['day_of_week'] = df.index.dayofweek
-    df['day_of_month'] = df.index.day
-    df['month'] = df.index.month
-    
+    if use_calendar:
+        df['day_of_week'] = df.index.dayofweek
+        df['day_of_month'] = df.index.day
+        df['month'] = df.index.month
     # Ratio cas/population
     if 'population' in df.columns:
         df['cases_per_100k'] = (df['new_cases'] / (df['population'] / 100000)).fillna(0)
         df['deaths_per_100k'] = (df['new_deaths'] / (df['population'] / 100000)).fillna(0)
-    
     # Suppression des lignes avec valeurs manquantes
     df = df.dropna()
     return df
