@@ -51,8 +51,19 @@ def create_features(df: pd.DataFrame, target: str, look_back: int = 30,
         df['month'] = df.index.month
     # Ratio cas/population
     if 'population' in df.columns:
-        df['cases_per_100k'] = (df['new_cases'] / (df['population'] / 100000)).fillna(0)
-        df['deaths_per_100k'] = (df['new_deaths'] / (df['population'] / 100000)).fillna(0)
+        df['cases_per_100k'] = (pd.to_numeric(df['new_cases'], errors='coerce') / (pd.to_numeric(df['population'], errors='coerce') / 100000)).fillna(0)
+        df['deaths_per_100k'] = (pd.to_numeric(df['new_deaths'], errors='coerce') / (pd.to_numeric(df['population'], errors='coerce') / 100000)).fillna(0)
+    
     # Suppression des lignes avec valeurs manquantes
-    df = df.dropna()
+    cols_to_check = [target]
+    if use_lags:
+        cols_to_check += [f'lag_{i}' for i in range(1, look_back + 1)]
+    if use_rolling:
+        cols_to_check += ['rolling_7_mean', 'rolling_30_mean']
+    if use_calendar:
+        cols_to_check += ['day_of_week', 'day_of_month', 'month']
+    if 'population' in df.columns:
+        cols_to_check += ['cases_per_100k', 'deaths_per_100k']
+
+    df = df.dropna(subset=cols_to_check)
     return df

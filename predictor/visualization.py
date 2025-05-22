@@ -25,8 +25,18 @@ def plot_predictions(df, preds, target, country_name, output_dir="visualization"
     """
     ensure_dir_exists(output_dir)
     plt.figure(figsize=(12, 6))
+    # Courbe historique
     plt.plot(df.index, df[target], label='Données historiques', color='blue')
-    plt.plot(preds.index, preds[f'predicted_{target}'], label='Prédictions', color='red', linestyle='--')
+    # Courbe prédiction reliée à l'historique
+    # On prend la dernière valeur historique et on la concatène avec les prédictions
+    last_date = df.index[-1]
+    last_value = df[target].iloc[-1]
+    pred_dates = preds.index
+    pred_values = preds[f'predicted_{target}']
+    # On crée une nouvelle série pour la prédiction continue
+    all_pred_dates = [last_date] + list(pred_dates)
+    all_pred_values = [last_value] + list(pred_values)
+    plt.plot(all_pred_dates, all_pred_values, label='Prédictions', color='red')
     plt.title(f"Prédiction des {target} pour {country_name}")
     plt.xlabel('Date')
     plt.ylabel(f"Nombre de {target}")
@@ -74,7 +84,7 @@ def plot_residuals(y_true, y_pred, country_name, target, output_dir="visualizati
     residuals = y_true - y_pred
     plt.figure(figsize=(10, 5))
     plt.scatter(y_pred, residuals, alpha=0.5)
-    plt.axhline(0, color='red', linestyle='--')
+    plt.axhline(0, color='red')
     plt.xlabel("Valeurs prédites")
     plt.ylabel("Résidus (y_true - y_pred)")
     plt.title(f"Résidus du modèle pour {country_name} ({target})")
