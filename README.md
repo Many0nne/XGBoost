@@ -126,7 +126,7 @@ Ce processus permet d’obtenir un modèle global très performant, capable de c
 - **XGBoost** (Extreme Gradient Boosting) est une implémentation optimisée du gradient boosting.
 - Lors de l’entraînement, XGBoost construit séquentiellement des arbres de décision, chaque arbre cherchant à corriger les erreurs des arbres précédents.
 - Chaque arbre est construit en minimisant une fonction de perte (par exemple, l’erreur quadratique pour la régression) et en appliquant une régularisation pour éviter le surapprentissage.
-- Lors de la prédiction, chaque arbre donne une estimation ; la prédiction finale est la somme (ou la moyenne pondérée) des prédictions de tous les arbres de l’ensemble.
+- Lors de la prédiction, chaque arbre dans XGBoost apporte une correction additive à la prédiction précédente. La prédiction finale est obtenue par la somme des contributions de tous les arbres, pondérée éventuellement par un taux d'apprentissage.
 - XGBoost utilise des techniques avancées comme le sous-échantillonnage des colonnes et des lignes, la gestion efficace des valeurs manquantes, et l’optimisation parallèle pour accélérer l’entraînement.
 
 **En résumé :**  
