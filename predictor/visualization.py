@@ -3,39 +3,21 @@ import os
 import numpy as np
 
 def ensure_dir_exists(output_dir):
-    """
-    Vérifie si le répertoire de sortie existe, sinon le crée.
-    """
+    """Vérifie si le répertoire de sortie existe, sinon le crée."""
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
 def plot_predictions(df, preds, target, country_name, output_dir="visualization"):
-    """
-    Enregistre un graphique comparant les données historiques et les prédictions dans un fichier.
-
-    Args:
-        df (pd.DataFrame): DataFrame contenant les données historiques.
-        preds (pd.DataFrame): DataFrame contenant les prédictions.
-        target (str): Nom de la colonne cible à prédire.
-        country_name (str): Nom du pays pour lequel les prédictions sont faites.
-        output_dir (str): Répertoire de sortie pour sauvegarder le graphique.
-
-    Returns:
-        None
-    """
+    """Enregistre un graphique comparant les données historiques et les prédictions."""
     ensure_dir_exists(output_dir)
     plt.figure(figsize=(12, 6))
-    # Courbe historique
     plt.plot(df.index, df[target], label='Données historiques', color='blue')
-    # Courbe prédiction reliée à l'historique
-    # On prend la dernière valeur historique et on la concatène avec les prédictions
+    
     last_date = df.index[-1]
     last_value = df[target].iloc[-1]
-    pred_dates = preds.index
-    pred_values = preds[f'predicted_{target}']
-    # On crée une nouvelle série pour la prédiction continue
-    all_pred_dates = [last_date] + list(pred_dates)
-    all_pred_values = [last_value] + list(pred_values)
+    all_pred_dates = [last_date] + list(preds.index)
+    all_pred_values = [last_value] + list(preds[f'predicted_{target}'])
+    
     plt.plot(all_pred_dates, all_pred_values, label='Prédictions', color='red')
     plt.title(f"Prédiction des {target} pour {country_name}")
     plt.xlabel('Date')
@@ -43,23 +25,46 @@ def plot_predictions(df, preds, target, country_name, output_dir="visualization"
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
+    
     output_path = os.path.join(output_dir, f"{country_name}_{target}_predictions.png")
     plt.savefig(output_path)
     plt.close()
 
+def plot_combined_predictions(df, cases_preds, deaths_preds, country_name, output_dir="visualization"):
+    """Enregistre un graphique combinant les prédictions de cas et décès."""
+    ensure_dir_exists(output_dir)
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
+    
+    # Graphique des cas
+    ax1.plot(df.index, df['new_cases'], label='Cas historiques', color='blue')
+    last_date = df.index[-1]
+    last_value = df['new_cases'].iloc[-1]
+    all_pred_dates = [last_date] + list(cases_preds.index)
+    all_pred_values = [last_value] + list(cases_preds['predicted_new_cases'])
+    ax1.plot(all_pred_dates, all_pred_values, label='Prédictions cas', color='red')
+    ax1.set_ylabel("Nombre de nouveaux cas")
+    ax1.legend()
+    ax1.grid(True)
+    
+    # Graphique des décès
+    ax2.plot(df.index, df['new_deaths'], label='Décès historiques', color='green')
+    last_value = df['new_deaths'].iloc[-1]
+    all_pred_values = [last_value] + list(deaths_preds['predicted_new_deaths'])
+    ax2.plot(all_pred_dates, all_pred_values, label='Prédictions décès', color='orange')
+    ax2.set_ylabel("Nombre de nouveaux décès")
+    ax2.set_xlabel('Date')
+    ax2.legend()
+    ax2.grid(True)
+    
+    plt.suptitle(f"Prédictions COVID-19 pour {country_name}")
+    plt.tight_layout()
+    
+    output_path = os.path.join(output_dir, f"{country_name}_combined_predictions.png")
+    plt.savefig(output_path)
+    plt.close()
+
 def save_metrics(metrics: dict, country_name: str, target: str, output_dir="visualization"):
-    """
-    Sauvegarde les métriques d'évaluation du modèle dans un fichier texte.
-
-    Args:
-        metrics (dict): Dictionnaire contenant les métriques d'évaluation.
-        country_name (str): Nom du pays pour lequel les métriques sont calculées.
-        target (str): Nom de la colonne cible à prédire.
-        output_dir (str): Répertoire de sortie pour sauvegarder le fichier texte.
-
-    Returns:
-        None
-    """
+    """Sauvegarde les métriques d'évaluation du modèle."""
     ensure_dir_exists(output_dir)
     output_path = os.path.join(output_dir, f"{country_name}_{target}_metrics.txt")
     with open(output_path, "w") as f:
@@ -67,19 +72,7 @@ def save_metrics(metrics: dict, country_name: str, target: str, output_dir="visu
             f.write(f"{key}: {value}\n")
 
 def plot_residuals(y_true, y_pred, country_name, target, output_dir="visualization"):
-    """
-    Génère et sauvegarde le graphique des résidus (erreurs) du modèle.
-
-    Args:
-        y_true (np.ndarray): Valeurs réelles.
-        y_pred (np.ndarray): Valeurs prédites.
-        country_name (str): Nom du pays pour lequel les résidus sont calculés.
-        target (str): Nom de la colonne cible à prédire.
-        output_dir (str): Répertoire de sortie pour sauvegarder le graphique.
-
-    Returns:
-        None
-    """
+    """Génère et sauvegarde le graphique des résidus."""
     ensure_dir_exists(output_dir)
     residuals = y_true - y_pred
     plt.figure(figsize=(10, 5))
@@ -89,6 +82,7 @@ def plot_residuals(y_true, y_pred, country_name, target, output_dir="visualizati
     plt.ylabel("Résidus (y_true - y_pred)")
     plt.title(f"Résidus du modèle pour {country_name} ({target})")
     plt.tight_layout()
+    
     output_path = os.path.join(output_dir, f"{country_name}_{target}_residuals.png")
     plt.savefig(output_path)
     plt.close()

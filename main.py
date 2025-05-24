@@ -1,7 +1,7 @@
 from predictor.database import create_db_engine, load_data
 from predictor.data_processing import create_features
 from predictor.model import PandemicModel
-from predictor.visualization import plot_predictions, plot_residuals, save_metrics
+from predictor.visualization import (plot_predictions, plot_residuals, save_metrics, plot_combined_predictions)
 import argparse
 import os
 
@@ -18,10 +18,13 @@ d'apprentissage automatique (XGBoost). Les étapes incluent :
 Ce système peut être utilisé pour anticiper les tendances et aider à la prise de décision dans des contextes
 sanitaires ou épidémiologiques.
 """
-if __name__ == "__main__":
+
+def main():
     parser = argparse.ArgumentParser(description="Prédiction de cas/décès par IA")
     parser.add_argument("--country", type=str, default="France", help="Nom du pays à prédire")
     parser.add_argument("--days", type=int, default=7, help="Nombre de jours à prédire")
+    parser.add_argument("--no-train", action="store_true", help="Utiliser les modèles existants sans ré-entraînement")
+    parser.add_argument("--tune", action="store_true", help="Effectuer un tuning des hyperparamètres")
     args = parser.parse_args()
 
     # Configuration de la base de données
@@ -30,9 +33,9 @@ if __name__ == "__main__":
     DB_HOST = "localhost"
     DB_NAME = "pandemia"
 
-    # S'assurer que le dossier visualization existe
-    if not os.path.exists("visualization"):
-        os.makedirs("visualization")
+    # S'assurer que les dossiers existent
+    os.makedirs("visualization", exist_ok=True)
+    os.makedirs("models", exist_ok=True)
 
     # Initialisation
     engine = create_db_engine(DB_USER, DB_PASSWORD, DB_HOST, DB_NAME)
@@ -44,7 +47,10 @@ if __name__ == "__main__":
 
     # Liste des cibles à prédire
     targets = ["new_cases", "new_deaths"]
+    predictions = {}
 
+    model_manager = PandemicModel()
+    
     for target in targets:
         # Vérifier que la colonne cible existe bien
         if target not in df.columns:
@@ -55,33 +61,47 @@ if __name__ == "__main__":
         df_features = create_features(df.copy(), target, look_back=30, use_lags=True, use_rolling=True, use_calendar=True)
 
         # Définition unique de la liste des features
-        feature_names = [col for col in df_features.columns if col.startswith('lag_') or 
-                         col.startswith('rolling_') or 
-                         col in ['day_of_week', 'day_of_month', 'month', 'cases_per_100k', 'deaths_per_100k']]
+        feature_names = [col for col in df_features.columns if col.startswith('lag_') or col.startswith('rolling_') or col in ['day_of_week', 'day_of_month', 'month', 'cases_per_100k', 'deaths_per_100k']]
 
-        # Initialisation du gestionnaire de modèles
-        model_manager = PandemicModel()
-
-        # Entraînement du modèle
-        model, metrics = model_manager.train_model(df_features, target, feature_names=feature_names)
-
-        # Enregistrement des métriques (si tu veux les sauvegarder)
-        save_metrics(metrics, country_name, target)
+        if not args.no_train:
+            # Entraînement du modèle avec option de tuning
+            model, metrics = model_manager.train_model(df_features, target, feature_names=feature_names,tune_hyperparams=args.tune)
+            # Sauvegarde du modèle
+            model_manager.save_model(model, target)
+        else:
+            # Chargement du modèle existant
+            model = model_manager.load_model(target)
+            if model is None:
+                print(f"Aucun modèle trouvé pour {target}, entraînement d'un nouveau modèle.")
+                model, metrics = model_manager.train_model(df_features, target, feature_names=feature_names,tune_hyperparams=args.tune)
+                model_manager.save_model(model, target)
 
         # Prédictions futures
-        predictions = model_manager.predict_future(df_features, target, feature_names=feature_names, days_ahead=days_ahead)
-
+        preds = model_manager.predict_future(df_features, target, feature_names=feature_names, days_ahead=days_ahead)
+        
         # On clippe les valeurs prédites pour éviter les valeurs négatives
-        predictions[f"predicted_{target}"] = predictions[f"predicted_{target}"].clip(lower=0)
+        preds[f"predicted_{target}"] = preds[f"predicted_{target}"].clip(lower=0)
+        predictions[target] = preds
+
+        # Enregistrement des métriques
+        if not args.no_train:
+            save_metrics(metrics, country_name, target)
 
         # Sauvegarde des prédictions dans un CSV
-        predictions.to_csv(f"visualization/{country_name}_{target}_predictions.csv")
+        preds.to_csv(f"visualization/{country_name}_{target}_predictions.csv")
 
         # Enregistrement du graphique réel vs prédictions
-        plot_predictions(df_features, predictions, target, country_name)
+        plot_predictions(df_features, preds, target, country_name)
 
-        # Graphique des résidus (optionnel)
-        if len(df_features) >= len(predictions):
-            y_true = df_features[target].iloc[-len(predictions):].values
-            y_pred = predictions[f"predicted_{target}"].values
+        # Graphique des résidus (si on a assez de données et qu'on a entraîné)
+        if not args.no_train and len(df_features) >= len(preds):
+            y_true = df_features[target].iloc[-len(preds):].values
+            y_pred = preds[f"predicted_{target}"].values
             plot_residuals(y_true, y_pred, country_name, target)
+
+    # Graphique combiné si les deux cibles sont disponibles
+    if all(t in predictions for t in targets):
+        plot_combined_predictions(df_features, predictions["new_cases"], predictions["new_deaths"], country_name)
+
+if __name__ == "__main__":
+    main()
