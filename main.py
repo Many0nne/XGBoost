@@ -1,7 +1,7 @@
 from predictor.database import create_db_engine, load_data
 from predictor.data_processing import create_features
 from predictor.model import PandemicModel
-from predictor.visualization import (plot_predictions, plot_residuals, save_metrics, plot_combined_predictions)
+from predictor.visualization import (plot_predictions, plot_residuals, save_metrics, plot_combined_predictions, plot_mortality_rate, save_mortality_stats)
 import argparse
 import os
 
@@ -46,7 +46,7 @@ def main():
     df = load_data(engine, country_name)
 
     # Liste des cibles à prédire
-    targets = ["new_cases", "new_deaths"]
+    targets = ["new_cases", "new_deaths", "new_recovered"]
     predictions = {}
 
     model_manager = PandemicModel()
@@ -102,6 +102,11 @@ def main():
     # Graphique combiné si les deux cibles sont disponibles
     if all(t in predictions for t in targets):
         plot_combined_predictions(df_features, predictions["new_cases"], predictions["new_deaths"], country_name)
+
+        # Calcul et affichage du taux de mortalité si les deux cibles sont disponibles
+    if all(t in predictions for t in targets):
+        plot_mortality_rate(df_features,predictions["new_cases"],predictions["new_deaths"],country_name)
+        save_mortality_stats(predictions["new_cases"],predictions["new_deaths"],country_name)
 
 if __name__ == "__main__":
     main()

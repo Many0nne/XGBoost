@@ -44,6 +44,7 @@ def load_data(engine, country_name: str) -> pd.DataFrame:
     AND gd.date IS NOT NULL
     AND gd.new_cases IS NOT NULL
     AND gd.new_deaths IS NOT NULL
+    AND gd.new_recovered IS NOT NULL
     ORDER BY gd.date
     """
     try:

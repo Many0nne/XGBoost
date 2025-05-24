@@ -22,8 +22,12 @@ def _create_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
 def _create_population_features(df: pd.DataFrame) -> pd.DataFrame:
     """Crée les ratios basés sur la population."""
     if 'population' in df.columns:
-        df['cases_per_100k'] = (pd.to_numeric(df['new_cases'], errors='coerce') / (pd.to_numeric(df['population'], errors='coerce') / 100000)).fillna(0)
-        df['deaths_per_100k'] = (pd.to_numeric(df['new_deaths'], errors='coerce') / (pd.to_numeric(df['population'], errors='coerce') / 100000)).fillna(0)
+        if 'new_cases' in df.columns:
+            df['cases_per_100k'] = (pd.to_numeric(df['new_cases'], errors='coerce') / (pd.to_numeric(df['population'], errors='coerce') / 100000)).fillna(0)
+        if 'new_deaths' in df.columns:
+            df['deaths_per_100k'] = (pd.to_numeric(df['new_deaths'], errors='coerce') / (pd.to_numeric(df['population'], errors='coerce') / 100000)).fillna(0)
+        if 'new_recovered' in df.columns:
+            df['recovered_per_100k'] = (pd.to_numeric(df['new_recovered'], errors='coerce') / (pd.to_numeric(df['population'], errors='coerce') / 100000)).fillna(0)
     return df
 
 def create_features(df: pd.DataFrame, target: str, look_back: int = 30,use_lags: bool = True, use_rolling: bool = True, use_calendar: bool = True) -> pd.DataFrame:
