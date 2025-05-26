@@ -4,11 +4,15 @@ Ce projet implémente une Intelligence Artificielle permettant de prédire l’�
 
 ## Fonctionnalités
 
-- Chargement des données depuis une base de données relationnelle.
-- Création automatique de features temporelles (moyennes mobiles, décalages, etc.).
-- Entraînement d’un modèle de prédiction (XGBoost) pour estimer les valeurs futures.
-- Génération et sauvegarde de graphiques comparant les données historiques et les prédictions.
+- Prédiction simultanée de plusieurs cibles (`new_cases`, `new_deaths`, `new_recovered`) avec un seul appel.
+- Chargement dynamique des données depuis la base, seules les colonnes nécessaires sont récupérées selon les cibles choisies.
+- Création automatique de features temporelles (moyennes mobiles, décalages, etc.), avec ajout conditionnel des features selon la disponibilité des colonnes (ex : `cases_per_100k` uniquement si `new_cases` et `population` sont présents).
+- Entraînement d’un modèle de prédiction (XGBoost) pour chaque cible, avec possibilité de tuning des hyperparamètres.
+- Génération et sauvegarde de graphiques individuels et combinés pour toutes les cibles sélectionnées.
+- Visualisation avancée : taux de mortalité (si `new_cases` et `new_deaths` sont prédits), graphiques de résidus, etc.
+- Sauvegarde automatique des métriques d’évaluation (R², RMSE, MAE) pour chaque cible.
 - Modularité du code (séparé en plusieurs fichiers pour la base, le traitement, le modèle, la visualisation).
+
 
 ## Structure du projet
 
@@ -54,10 +58,12 @@ MSPR.AI/
 
 ## Utilisation
 
-1. Lancer la prédiction et la génération du graphique  
-   python main.py (utilisation par défaut)
-
-   python main.py --country "votre_pays" --days <nbr_jours_a_predire>
+1. Lancer la prédiction et la génération des graphiques :
+   ```bash
+   python main.py --country "votre_pays" --days <nbr_jours_a_predire> --targets new_cases new_deaths
+   ```
+   - Les cibles sont dynamiques, tu peux en choisir une ou plusieurs parmi : `new_cases`, `new_deaths`, `new_recovered`.
+   - Par défaut, toutes les cibles sont prédites si vous ne spécifiez pas de paramètre.
 
 2. Résultat  
    - Un graphique de prédiction sera généré dans le dossier visualization/.
