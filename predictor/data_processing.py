@@ -54,7 +54,12 @@ def create_features(df: pd.DataFrame, target: str, look_back: int = 30,use_lags:
     if use_calendar:
         feature_cols += ['day_of_week', 'day_of_month', 'month']
     if 'population' in df.columns:
-        feature_cols += ['cases_per_100k', 'deaths_per_100k']
+        if 'new_cases' in df.columns:
+            feature_cols.append('cases_per_100k')
+        if 'new_deaths' in df.columns:
+            feature_cols.append('deaths_per_100k')
+        if 'new_recovered' in df.columns:
+            feature_cols.append('recovered_per_100k')
     
     # Ne garder que les colonnes non-features et ajouter les nouvelles
     existing_cols = [col for col in df.columns if col not in feature_cols]
@@ -71,5 +76,5 @@ def create_features(df: pd.DataFrame, target: str, look_back: int = 30,use_lags:
         df = _create_population_features(df)
 
     # Suppression des lignes avec valeurs manquantes
-    cols_to_check = [target] + feature_cols
+    cols_to_check = [col for col in [target] + feature_cols if col in df.columns]
     return df.dropna(subset=cols_to_check)

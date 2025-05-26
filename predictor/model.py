@@ -153,3 +153,26 @@ class PandemicModel:
             last_data = pd.concat([last_data, new_row]).iloc[1:]
         
         return pd.DataFrame(predictions).set_index('date')
+
+    def predict_multiple_targets(self, df, targets=None, feature_names=None, days_ahead=7, look_back=30):
+        """
+        Prédit les valeurs futures pour plusieurs cibles.
+        
+        Args:
+            df: DataFrame contenant les données historiques.
+            targets: Liste des cibles à prédire (par défaut ['new_cases', 'new_deaths', 'new_recovered']).
+            feature_names: Liste des noms de colonnes à utiliser comme features.
+            days_ahead: Nombre de jours à prédire.
+            look_back: Nombre de jours pour les features de décalage temporel.
+            
+        Returns:
+            Dictionnaire contenant les prédictions pour chaque cible.
+        """
+        if targets is None:
+            targets = ['new_cases', 'new_deaths', 'new_recovered']
+            
+        predictions = {}
+        for target in targets:
+            predictions[target] = self.predict_future(df, target, feature_names, days_ahead, look_back)
+        
+        return predictions

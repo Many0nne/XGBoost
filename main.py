@@ -1,23 +1,9 @@
 from predictor.database import create_db_engine, load_data
 from predictor.data_processing import create_features
 from predictor.model import PandemicModel
-from predictor.visualization import (plot_predictions, plot_residuals, save_metrics, plot_combined_predictions, plot_mortality_rate, save_mortality_stats)
+from predictor.visualization import visualize_all_results
 import argparse
 import os
-
-"""
-Ce projet implémente une IA pour prédire l'évolution des cas ou des décès liés à une maladie dans un pays donné.
-L'objectif principal est de fournir des prédictions basées sur des données historiques, en utilisant des modèles
-d'apprentissage automatique (XGBoost). Les étapes incluent :
-
-1. Chargement des données depuis une base de données MySQL.
-2. Préparation des données avec des features temporelles (décalages, moyennes mobiles, etc.).
-3. Entraînement d'un modèle de prédiction pour estimer les valeurs futures.
-4. Génération de graphiques comparant les données historiques et les prédictions.
-
-Ce système peut être utilisé pour anticiper les tendances et aider à la prise de décision dans des contextes
-sanitaires ou épidémiologiques.
-"""
 
 def main():
     parser = argparse.ArgumentParser(description="Prédiction de cas/décès par IA")
@@ -25,6 +11,10 @@ def main():
     parser.add_argument("--days", type=int, default=7, help="Nombre de jours à prédire")
     parser.add_argument("--no-train", action="store_true", help="Utiliser les modèles existants sans ré-entraînement")
     parser.add_argument("--tune", action="store_true", help="Effectuer un tuning des hyperparamètres")
+    parser.add_argument("--targets", nargs="+", 
+                       choices=["new_cases", "new_deaths", "new_recovered"],
+                       default=["new_cases", "new_deaths", "new_recovered"],
+                       help="Cibles à prédire (par défaut: toutes)")
     args = parser.parse_args()
 
     # Configuration de la base de données
@@ -41,72 +31,85 @@ def main():
     engine = create_db_engine(DB_USER, DB_PASSWORD, DB_HOST, DB_NAME)
     country_name = args.country
     days_ahead = args.days
+    targets = args.targets
 
-    # Chargement des données
-    df = load_data(engine, country_name)
-
-    # Liste des cibles à prédire
-    targets = ["new_cases", "new_deaths", "new_recovered"]
-    predictions = {}
+    # Chargement des données (en passant les targets)
+    df = load_data(engine, country_name, targets=targets)
 
     model_manager = PandemicModel()
-    
+    predictions = {}
+    metrics = {}
+
     for target in targets:
-        # Vérifier que la colonne cible existe bien
+        # Vérifier que la colonne cible existe bien dans les données chargées
         if target not in df.columns:
-            print(f"Colonne {target} absente, passage.")
+            print(f"Attention: La colonne {target} n'est pas présente dans les données chargées.")
             continue
 
         # Création des features pour chaque cible
-        df_features = create_features(df.copy(), target, look_back=30, use_lags=True, use_rolling=True, use_calendar=True)
+        df_features = create_features(df.copy(), target, look_back=30, 
+                                    use_lags=True, use_rolling=True, use_calendar=True)
 
-        # Définition unique de la liste des features
-        feature_names = [col for col in df_features.columns if col.startswith('lag_') or col.startswith('rolling_') or col in ['day_of_week', 'day_of_month', 'month', 'cases_per_100k', 'deaths_per_100k']]
+        # Définition de la liste des features
+        feature_names = [col for col in df_features.columns 
+            if col.startswith('lag_') or 
+            col.startswith('rolling_') or 
+            col in ['day_of_week', 'day_of_month', 'month', 
+                    'cases_per_100k', 'deaths_per_100k', 'recovered_per_100k']
+            and col in df_features.columns]
 
         if not args.no_train:
             # Entraînement du modèle avec option de tuning
-            model, metrics = model_manager.train_model(df_features, target, feature_names=feature_names,tune_hyperparams=args.tune)
+            print(f"Entraînement du modèle pour {target}...")
+            model, target_metrics = model_manager.train_model(
+                df_features, target, feature_names=feature_names, 
+                tune_hyperparams=args.tune
+            )
             # Sauvegarde du modèle
             model_manager.save_model(model, target)
+            metrics[target] = target_metrics
+            print(f"Modèle entraîné pour {target} - Métriques: {target_metrics}")
         else:
             # Chargement du modèle existant
+            print(f"Chargement du modèle existant pour {target}...")
             model = model_manager.load_model(target)
             if model is None:
                 print(f"Aucun modèle trouvé pour {target}, entraînement d'un nouveau modèle.")
-                model, metrics = model_manager.train_model(df_features, target, feature_names=feature_names,tune_hyperparams=args.tune)
+                model, target_metrics = model_manager.train_model(
+                    df_features, target, feature_names=feature_names, 
+                    tune_hyperparams=args.tune
+                )
                 model_manager.save_model(model, target)
+                metrics[target] = target_metrics
 
         # Prédictions futures
-        preds = model_manager.predict_future(df_features, target, feature_names=feature_names, days_ahead=days_ahead)
+        print(f"Génération des prédictions pour {target}...")
+        preds = model_manager.predict_future(
+            df_features, target, feature_names=feature_names, 
+            days_ahead=days_ahead
+        )
         
         # On clippe les valeurs prédites pour éviter les valeurs négatives
         preds[f"predicted_{target}"] = preds[f"predicted_{target}"].clip(lower=0)
         predictions[target] = preds
 
-        # Enregistrement des métriques
-        if not args.no_train:
-            save_metrics(metrics, country_name, target)
-
         # Sauvegarde des prédictions dans un CSV
         preds.to_csv(f"visualization/{country_name}_{target}_predictions.csv")
+        print(f"Prédictions sauvegardées pour {target}")
 
-        # Enregistrement du graphique réel vs prédictions
-        plot_predictions(df_features, preds, target, country_name)
-
-        # Graphique des résidus (si on a assez de données et qu'on a entraîné)
-        if not args.no_train and len(df_features) >= len(preds):
-            y_true = df_features[target].iloc[-len(preds):].values
-            y_pred = preds[f"predicted_{target}"].values
-            plot_residuals(y_true, y_pred, country_name, target)
-
-    # Graphique combiné si les deux cibles sont disponibles
-    if all(t in predictions for t in targets):
-        plot_combined_predictions(df_features, predictions["new_cases"], predictions["new_deaths"], country_name)
-
-        # Calcul et affichage du taux de mortalité si les deux cibles sont disponibles
-    if all(t in predictions for t in targets):
-        plot_mortality_rate(df_features,predictions["new_cases"],predictions["new_deaths"],country_name)
-        save_mortality_stats(predictions["new_cases"],predictions["new_deaths"],country_name)
+    # Génération de toutes les visualisations
+    if predictions:  # Vérifie si le dictionnaire n'est pas vide
+        print("Génération des visualisations...")
+        visualize_all_results(df, predictions, country_name)
+        
+        # Sauvegarde des métriques
+        for target, target_metrics in metrics.items():
+            with open(f"visualization/{country_name}_{target}_metrics.txt", "w") as f:
+                for key, value in target_metrics.items():
+                    f.write(f"{key}: {value}\n")
+        print("Traitement terminé avec succès!")
+    else:
+        print("Aucune prédiction générée. Vérifiez les données chargées et les targets spécifiées.")
 
 if __name__ == "__main__":
     main()

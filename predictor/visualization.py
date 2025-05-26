@@ -30,43 +30,36 @@ def plot_predictions(df, preds, target, country_name, output_dir="visualization"
     plt.savefig(output_path)
     plt.close()
 
-def plot_combined_predictions(df, cases_preds, deaths_preds, recovered_preds, country_name, output_dir="visualization"):
-    """Enregistre un graphique combinant les prédictions de cas et décès."""
+def plot_combined_predictions(df, predictions, country_name, output_dir="visualization"):
+    """Enregistre un graphique combinant les prédictions des différentes cibles."""
     ensure_dir_exists(output_dir)
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(12, 15), sharex=True)
     
-    # Graphique des cas
-    ax1.plot(df.index, df['new_cases'], label='Cas historiques', color='blue')
-    last_date = df.index[-1]
-    last_value = df['new_cases'].iloc[-1]
-    all_pred_dates = [last_date] + list(cases_preds.index)
-    all_pred_values = [last_value] + list(cases_preds['predicted_new_cases'])
-    ax1.plot(all_pred_dates, all_pred_values, label='Prédictions cas', color='red')
-    ax1.set_ylabel("Nombre de nouveaux cas")
-    ax1.legend()
-    ax1.grid(True)
+    # Déterminer combien de subplots nous avons besoin
+    num_targets = len(predictions)
+    fig, axes = plt.subplots(num_targets, 1, figsize=(12, 5*num_targets), sharex=True)
     
-    # Graphique des décès
-    ax2.plot(df.index, df['new_deaths'], label='Décès historiques', color='green')
-    last_value = df['new_deaths'].iloc[-1]
-    all_pred_values = [last_value] + list(deaths_preds['predicted_new_deaths'])
-    ax2.plot(all_pred_dates, all_pred_values, label='Prédictions décès', color='orange')
-    ax2.set_ylabel("Nombre de nouveaux décès")
-    ax2.set_xlabel('Date')
-    ax2.legend()
-    ax2.grid(True)
-
-    # Graphique des guérisons
-    ax3.plot(df.index, df['new_recovered'], label='Guérisons historiques', color='purple')
-    last_value = df['new_recovered'].iloc[-1]
-    all_pred_values = [last_value] + list(recovered_preds['predicted_new_recovered'])
-    ax3.plot(all_pred_dates, all_pred_values, label='Prédictions guérisons', color='pink')
-    ax3.set_ylabel("Nouvelles guérisons")
-    ax3.set_xlabel('Date')
-    ax3.legend()
-    ax3.grid(True)
+    if num_targets == 1:
+        axes = [axes]
+    
+    colors = ['blue', 'green', 'purple']
+    pred_colors = ['red', 'orange', 'pink']
+    
+    for i, (target, pred_df) in enumerate(predictions.items()):
+        ax = axes[i]
+        ax.plot(df.index, df[target], label=f'{target} historiques', color=colors[i])
+        
+        last_date = df.index[-1]
+        last_value = df[target].iloc[-1]
+        all_pred_dates = [last_date] + list(pred_df.index)
+        all_pred_values = [last_value] + list(pred_df[f'predicted_{target}'])
+        
+        ax.plot(all_pred_dates, all_pred_values, label=f'Prédictions {target}', color=pred_colors[i])
+        ax.set_ylabel(f"Nombre de {target}")
+        ax.legend()
+        ax.grid(True)
     
     plt.suptitle(f"Prédictions COVID-19 pour {country_name}")
+    plt.xlabel('Date')
     plt.tight_layout()
     
     output_path = os.path.join(output_dir, f"{country_name}_combined_predictions.png")
@@ -168,3 +161,26 @@ def save_mortality_stats(cases_preds, deaths_preds, country_name, output_dir="vi
         f.write("\nDétails par jour:\n")
         for date, rate in mortality_rate.items():
             f.write(f"{date.date()}: {rate:.2f}%\n")
+
+def visualize_all_results(df, predictions, country_name, output_dir="visualization"):
+    """
+    Génère toutes les visualisations pour les résultats.
+    
+    Args:
+        df: DataFrame contenant les données historiques.
+        predictions: Dictionnaire des prédictions (clé: nom de la cible, valeur: DataFrame de prédictions).
+        country_name: Nom du pays.
+        output_dir: Répertoire de sortie.
+    """
+    # Graphiques individuels pour chaque target
+    for target, pred_df in predictions.items():
+        plot_predictions(df, pred_df, target, country_name, output_dir)
+    
+    # Graphique combiné si plusieurs targets
+    if len(predictions) > 1:
+        plot_combined_predictions(df, predictions, country_name, output_dir)
+        
+        # Graphique spécifique pour le taux de mortalité si new_cases et new_deaths sont présents
+        if 'new_cases' in predictions and 'new_deaths' in predictions:
+            plot_mortality_rate(df, predictions['new_cases'], predictions['new_deaths'], country_name, output_dir)
+            save_mortality_stats(predictions['new_cases'], predictions['new_deaths'], country_name, output_dir)
